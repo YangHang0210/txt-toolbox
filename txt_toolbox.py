@@ -15,11 +15,11 @@ PADDING = 12
 
 
 def read_lines(filepath: str) -> list[str]:
-    """读取文件所有行，自动检测编码"""
+    """读取文件所有行（自动检测编码），返回不含换行符的纯内容列表"""
     for encoding in ("utf-8", "utf-8-sig", "gbk", "gb2312", "latin-1"):
         try:
             with open(filepath, "r", encoding=encoding) as f:
-                return f.readlines()
+                return [line.rstrip("\r\n") for line in f.readlines()]
         except (UnicodeDecodeError, LookupError):
             continue
     raise ValueError(f"无法识别文件编码: {filepath}")
@@ -27,7 +27,9 @@ def read_lines(filepath: str) -> list[str]:
 
 def write_lines(filepath: str, lines: list[str]) -> None:
     with open(filepath, "w", encoding="utf-8") as f:
-        f.writelines(lines)
+        f.write("\n".join(lines))
+        if lines:
+            f.write("\n")
 
 
 def sort_file(filepath: str, reverse: bool = False) -> tuple[int, str]:
@@ -51,9 +53,8 @@ def deduplicate_file(filepath: str, keep_order: bool = True) -> tuple[int, int, 
         seen: set[str] = set()
         unique: list[str] = []
         for line in lines:
-            stripped = line.rstrip("\n").rstrip("\r")
-            if stripped not in seen:
-                seen.add(stripped)
+            if line not in seen:
+                seen.add(line)
                 unique.append(line)
     else:
         unique = list(dict.fromkeys(lines))
@@ -68,8 +69,8 @@ def subtract_files(filepath_main: str, filepath_filter: str) -> tuple[int, int, 
     """从 main 文件中删除存在于 filter 文件中的行，返回 (原始行数, 结果行数, 输出路径)"""
     main_lines = read_lines(filepath_main)
     filter_lines = read_lines(filepath_filter)
-    filter_set = {line.rstrip("\n").rstrip("\r") for line in filter_lines}
-    result = [line for line in main_lines if line.rstrip("\n").rstrip("\r") not in filter_set]
+    filter_set = set(filter_lines)
+    result = [line for line in main_lines if line not in filter_set]
 
     base, ext = os.path.splitext(filepath_main)
     out_path = f"{base}_subtracted{ext}"
