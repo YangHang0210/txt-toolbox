@@ -12,7 +12,7 @@ def main() -> None:
         sys.executable, "-m", "PyInstaller",
         "--onefile",
         "--windowed",
-        "--name", "TXT工具箱",
+        "--name", "TXT-Toolbox",
         "--clean",
         "txt_toolbox.py",
     ]
