@@ -46,9 +46,24 @@ def sort_file(filepath: str, reverse: bool = False) -> tuple[int, str]:
     return len(sorted_lines), out_path
 
 
-def deduplicate_file(filepath: str, keep_order: bool = True) -> tuple[int, int, str]:
-    """去重，返回 (原始行数, 去重后行数, 输出路径)"""
+def deduplicate_file(filepath: str, keep_order: bool = True) -> tuple[int, int, str, list[tuple[str, list[int]]]]:
+    """去重，返回 (原始行数, 去重后行数, 输出路径, 重复行分组列表)
+
+    重复行分组列表中每个元素为 (行内容, [行号列表])，行号从1开始。
+    只包含出现次数 >= 2 的行。
+    """
     lines = read_lines(filepath)
+
+    line_positions: dict[str, list[int]] = {}
+    for idx, line in enumerate(lines, start=1):
+        line_positions.setdefault(line, []).append(idx)
+
+    duplicate_groups = [
+        (content, positions)
+        for content, positions in line_positions.items()
+        if len(positions) >= 2
+    ]
+
     if keep_order:
         seen: set[str] = set()
         unique: list[str] = []
@@ -62,7 +77,7 @@ def deduplicate_file(filepath: str, keep_order: bool = True) -> tuple[int, int, 
     base, ext = os.path.splitext(filepath)
     out_path = f"{base}_dedup{ext}"
     write_lines(out_path, unique)
-    return len(lines), len(unique), out_path
+    return len(lines), len(unique), out_path, duplicate_groups
 
 
 def subtract_files(filepath_main: str, filepath_filter: str) -> tuple[int, int, str]:
@@ -213,10 +228,22 @@ class TxtToolboxApp:
             messagebox.showerror("错误", f"文件不存在：{path}")
             return
         try:
-            total, unique, out = deduplicate_file(path)
-            removed = total - unique
-            self._log(f"[去重] 完成 ✓  原始 {total} 行，去重后 {unique} 行（删除 {removed} 行）→ {out}")
-            messagebox.showinfo("完成", f"去重完成！\n原始行数：{total}\n去重后：{unique}\n删除重复：{removed}\n输出文件：{out}")
+            total, unique_count, out, dup_groups = deduplicate_file(path)
+            removed = total - unique_count
+            self._log(f"[去重] 完成 ✓  原始 {total} 行，去重后 {unique_count} 行（删除 {removed} 行）→ {out}")
+
+            if dup_groups:
+                self._log(f"[去重] 共发现 {len(dup_groups)} 组重复行，详情如下：")
+                for content, positions in dup_groups:
+                    display_content = content if len(content) <= 80 else content[:80] + "…"
+                    line_nums = ", ".join(str(n) for n in positions)
+                    self._log(f"  行号 [{line_nums}] 重复（共{len(positions)}次）: \"{display_content}\"")
+                self._log("")
+
+            messagebox.showinfo(
+                "完成",
+                f"去重完成！\n原始行数：{total}\n去重后：{unique_count}\n删除重复：{removed}\n重复分组：{len(dup_groups)} 组\n输出文件：{out}",
+            )
         except Exception as e:
             self._log(f"[去重] 失败 ✗  {e}")
             messagebox.showerror("错误", str(e))
